@@ -202,11 +202,21 @@ func main() {
 	}()
 
 	var listenErr error
+	getListening := func() string {
+		if enableZiti {
+			return fmt.Sprintf("ziti serviceName=%s", serviceName)
+		}
+		s := "http"
+		if serveTLS {
+			s += "s"
+		}
+		return fmt.Sprintf("%s://%s", s, listenAddr)
+	}
 	if serveTLS {
-		serverLog("go-httpbin listening on https://%s", listenAddr)
+		serverLog("go-httpbin listening on %s", getListening())
 		listenErr = server.ListenAndServeTLS(httpsCertFile, httpsKeyFile)
 	} else {
-		serverLog("go-httpbin listening on http://%s", listenAddr)
+		serverLog("go-httpbin listening on %s", getListening())
 		listenErr = server.ListenAndServe()
 	}
 	if listenErr != nil && listenErr != http.ErrServerClosed {
