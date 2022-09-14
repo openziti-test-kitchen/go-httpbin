@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mccutchen/go-httpbin/v2/httpbin"
+	"github.com/mccutchen/go-httpbin/v2/zitiserver"
 )
 
 const (
@@ -29,7 +30,18 @@ var (
 	httpsCertFile   string
 	httpsKeyFile    string
 	useRealHostname bool
+
+	identityJson string
+	serviceName  string
+	enableZiti   bool
 )
+
+type Server interface {
+	SetKeepAlivesEnabled(bool)
+	Shutdown(context.Context) error
+	ListenAndServeTLS(string, string) error
+	ListenAndServe() error
+}
 
 func main() {
 	flag.StringVar(&host, "host", defaultHost, "Host to listen on")
@@ -39,6 +51,10 @@ func main() {
 	flag.Int64Var(&maxBodySize, "max-body-size", httpbin.DefaultMaxBodySize, "Maximum size of request or response, in bytes")
 	flag.DurationVar(&maxDuration, "max-duration", httpbin.DefaultMaxDuration, "Maximum duration a response may take")
 	flag.BoolVar(&useRealHostname, "use-real-hostname", false, "Expose value of os.Hostname() in the /hostname endpoint instead of dummy value")
+
+	flag.BoolVar(&enableZiti, "ziti", false, "Enable the usage of a ziti network")
+	flag.StringVar(&identityJson, "ziti-identity", "", "Path to Ziti Identity json file")
+	flag.StringVar(&serviceName, "ziti-name", "", "Name of the Ziti Service")
 	flag.Parse()
 
 	// Command line flags take precedence over environment vars, so we only
@@ -97,6 +113,30 @@ func main() {
 		useRealHostname = true
 	}
 
+	if zitiEnv := os.Getenv("ENABLE_ZITI"); !enableZiti && (zitiEnv == "1" || zitiEnv == "true") {
+		enableZiti = true
+	}
+
+	if enableZiti {
+		if identityJson == "" && os.Getenv("ZITI_IDENTITY") != "" {
+			identityJson = os.Getenv("ZITI_IDENTITY")
+		}
+		if identityJson == "" {
+			fmt.Fprintf(os.Stderr, "Error: When running a ziti enabled service must have ziti identity provided\n\n")
+			flag.Usage()
+			os.Exit(1)
+		}
+
+		if serviceName == "" && os.Getenv("ZITI_SERVICE_NAME") != "" {
+			serviceName = os.Getenv("ZITI_SERVICE_NAME")
+		}
+		if serviceName == "" {
+			fmt.Fprintf(os.Stderr, "Error: When running a ziti enabled service must have ziti service name provided\n\n")
+			flag.Usage()
+			os.Exit(1)
+		}
+	}
+
 	logger := log.New(os.Stderr, "", 0)
 
 	// A hacky log helper function to ensure that shutdown messages are
@@ -127,9 +167,15 @@ func main() {
 
 	listenAddr := net.JoinHostPort(host, strconv.Itoa(port))
 
-	server := &http.Server{
-		Addr:    listenAddr,
-		Handler: h.Handler(),
+	var server Server
+
+	if enableZiti {
+		server = zitiserver.New(serviceName, identityJson, h.Handler())
+	} else {
+		server = &http.Server{
+			Addr:    listenAddr,
+			Handler: h.Handler(),
+		}
 	}
 
 	// shutdownCh triggers graceful shutdown on SIGINT or SIGTERM
