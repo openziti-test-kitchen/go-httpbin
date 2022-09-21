@@ -37,13 +37,6 @@ var (
 	enableZiti   bool
 )
 
-/*type Server interface {
-	SetKeepAlivesEnabled(bool)
-	Shutdown(context.Context) error
-	ListenAndServeTLS(string, string) error
-	ListenAndServe() error
-}*/
-
 func main() {
 	flag.StringVar(&host, "host", defaultHost, "Host to listen on")
 	flag.IntVar(&port, "port", defaultPort, "Port to listen on")
