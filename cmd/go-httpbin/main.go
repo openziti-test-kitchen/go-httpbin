@@ -14,7 +14,8 @@ import (
 	"time"
 
 	"github.com/mccutchen/go-httpbin/v2/httpbin"
-	"github.com/mccutchen/go-httpbin/v2/zitiserver"
+	"github.com/openziti/sdk-golang/ziti"
+	"github.com/openziti/sdk-golang/ziti/config"
 )
 
 const (
@@ -36,12 +37,12 @@ var (
 	enableZiti   bool
 )
 
-type Server interface {
+/*type Server interface {
 	SetKeepAlivesEnabled(bool)
 	Shutdown(context.Context) error
 	ListenAndServeTLS(string, string) error
 	ListenAndServe() error
-}
+}*/
 
 func main() {
 	flag.StringVar(&host, "host", defaultHost, "Host to listen on")
@@ -167,15 +168,33 @@ func main() {
 
 	listenAddr := net.JoinHostPort(host, strconv.Itoa(port))
 
-	var server Server
+	var listener net.Listener
 
 	if enableZiti {
-		server = zitiserver.New(serviceName, identityJson, h.Handler())
-	} else {
-		server = &http.Server{
-			Addr:    listenAddr,
-			Handler: h.Handler(),
+		config, err := config.NewFromFile(identityJson)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Unable to parse ziti identity: %v\n\n", err)
+			flag.Usage()
+			os.Exit(1)
 		}
+		zitiContext := ziti.NewContextWithConfig(config)
+
+		listener, err = zitiContext.Listen(serviceName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Unable to listen on ziti network: %v\n\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
+	} else {
+		listener, err = net.Listen("tcp", listenAddr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Unable to listen on %s: %v\n\n", listenAddr, err)
+			flag.Usage()
+			os.Exit(1)
+		}
+	}
+	server := &http.Server{
+		Handler: h.Handler(),
 	}
 
 	// shutdownCh triggers graceful shutdown on SIGINT or SIGTERM
@@ -214,12 +233,13 @@ func main() {
 	}
 	if serveTLS {
 		serverLog("go-httpbin listening on %s", getListening())
-		listenErr = server.ListenAndServeTLS(httpsCertFile, httpsKeyFile)
+		listenErr = server.ServeTLS(listener, httpsCertFile, httpsKeyFile)
 	} else {
 		serverLog("go-httpbin listening on %s", getListening())
-		listenErr = server.ListenAndServe()
+		listenErr = server.Serve(listener)
 	}
 	if listenErr != nil && listenErr != http.ErrServerClosed {
+		serverLog("%T", listenErr)
 		logger.Fatalf("failed to listen: %s", listenErr)
 	}
 
