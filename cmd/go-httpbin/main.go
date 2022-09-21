@@ -174,22 +174,23 @@ func main() {
 		config, err := config.NewFromFile(identityJson)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Unable to parse ziti identity: %v\n\n", err)
-			flag.Usage()
 			os.Exit(1)
 		}
 		zitiContext := ziti.NewContextWithConfig(config)
+		if err := zitiContext.Authenticate(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Unable to authenticate ziti: %v\n\n", err)
+			os.Exit(1)
+		}
 
 		listener, err = zitiContext.Listen(serviceName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Unable to listen on ziti network: %v\n\n", err)
-			flag.Usage()
 			os.Exit(1)
 		}
 	} else {
 		listener, err = net.Listen("tcp", listenAddr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Unable to listen on %s: %v\n\n", listenAddr, err)
-			flag.Usage()
 			os.Exit(1)
 		}
 	}
