@@ -54,6 +54,7 @@ $ go-httpbin -host 127.0.0.1 -port 8081 -https-cert-file ./server.crt -https-key
 Ziti Enabled Examples
 
 [![Ziti Reference](https://github.com/openziti/ziti)]
+[![Ziti Http Reference](https://github.com/openziti-test-kitchen/go-http)]
 This example assumes you are familiar with spinning up a ziti network and have a network with a service named "httpbin".
 ```bash
 # Ensure your ziti network is spun up.
