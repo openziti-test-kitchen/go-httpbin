@@ -132,7 +132,6 @@ func main() {
 	c := httpbinclient.NewClient(httpc, addr)
 
 	var request *http.Request
-	fmt.Println(flag.Args())
 	switch strings.ToLower(flag.Args()[0]) {
 	case "get":
 		request = c.Get(headers, queries)
@@ -149,7 +148,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error doing request: %v", err)
 		os.Exit(1)
 	}
-	fmt.Println(resp)
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading body: %v", err)
