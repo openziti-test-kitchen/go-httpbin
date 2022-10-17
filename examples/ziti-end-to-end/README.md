@@ -1,5 +1,5 @@
-#Setting up an End-to-End Ziti network
-##Prerequisites:
+# Setting up an End-to-End Ziti network
+## Prerequisites:
 
 Ziti Binaries and relevant configs.
 
@@ -7,11 +7,11 @@ Ziti Binaries and relevant configs.
 
 I have set up helpful environment variable for how I chose to get setup. I cloned the Ziti repository for local builds and set `$ZITI_SOURCE` to that directory.
 
-##Starting up the Ziti Network:
+## Starting up the Ziti Network:
 
-###Controller Setup
+### Controller Setup
 
-First we run teh ziti controller with the arguent being which ever config file we chose. For this example I am using the `ctrl.with.edge.yml` file bundled for examples in the ziti repository.
+First we run the ziti controller with the arguent being which ever config file we chose. For this example I am using the `ctrl.with.edge.yml` file bundled for examples in the ziti repository.
 ```
 ziti-controller run --log-formatter pfxlog $ZITI_SOURCE/ziti/etc/ctrl.with.edge.yml
 ```
@@ -24,7 +24,7 @@ ziti agent controller init <username> <password> <name-of-user>
 
 You can then login to the edge via `ziti edge login` and putting in your credentials.
 
-###Policies
+### Policies
 Next we create all of the relevant service policies:
 
 ```
@@ -60,7 +60,7 @@ ziti edge create service echo -a simple
 ```
 
 Now you can optionally delete the two jwt's we generated. We will not be using them in the rest of the example.
-###Edge Router
+### Edge Router
 Next we create and run the edge router:
 
 ```
@@ -77,13 +77,13 @@ Now we run the edge router like so! The controller host and port info is found i
 CONTROLLER_HOST=localhost CONTROLLER_PORT=6262 ZITI_EDGE_PORT=3022 LINK_LISTENER_PORT=4022 exec $GOPATH/bin/ziti-router run ${DEBUG} --debug-ops -v --log-formatter pfxlog ${ZITI_SOURCE}/ziti/etc/edge.router.yml
 ```
 
-##go-httpbin Server
+## go-httpbin Server
 All we need to do to run the server is pass in the relevant flags. This assumes you ran all above commands in the same directory, which you should see `simple-server.json`. If not then point the `-ziti-identity` flag to that file wherever it is.
 ```
 go-httpbin -ziti -ziti-identity ${PWD}/simple-server.json -ziti-name echo
 ```
 
-##Client
+## Client
 Running the client is all the same, just pass in the relevant files like above.
 ```
 go-httpbin-client -header k=v -header k=v2 -query y=m -ziti -ziti-identity ${PWD}/simple-client.json -ziti-name echo post test
