@@ -1,11 +1,18 @@
 # Setting up an End-to-End Ziti network
 ## Prerequisites:
 
+Go 1.19 installed and setup: [download](https://go.dev/doc/install). You're going to want to set you `$GOPATH` env variable which can be anywhere on your system. This is where modules, packages, and installed binaries will end up. Putting `$GOPATH/bin` in your path will help with running the executables later.
+
 Ziti Binaries and relevant configs.
 
 [OpenZiti](https://github.com/openziti/ziti/tree/main) contains downloads for the latest builds or you can build it yourself. There are many example configs [in the etc dir](https://github.com/openziti/ziti/tree/main/etc).
 
-I have set up helpful environment variable for how I chose to get setup. I cloned the Ziti repository for local builds and set `$ZITI_SOURCE` to that directory.
+I have set up helpful environment variable for how I chose to get setup. I cloned the Ziti repository for local builds and set `$ZITI_SOURCE` to that directory. I then went into that directory and ran 
+```
+go install ./...
+```
+
+This will output the binary to `$GOPATH/bin`. I then do the same thing with this repository to install the go-httpbin binaries
 
 ## Starting up the Ziti Network:
 
@@ -103,7 +110,7 @@ CONTROLLER_HOST=localhost \
 CONTROLLER_PORT=6262 \
 ZITI_EDGE_PORT=3022 \
 LINK_LISTENER_PORT=4022 \
-exec $GOPATH/bin/ziti-router run \
+exec ziti-router run \
     --debug-ops \
     --verbose \
     --log-formatter pfxlog \
