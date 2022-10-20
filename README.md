@@ -3,7 +3,9 @@
 A reasonably complete and well-tested golang port of [Kenneth Reitz][kr]'s
 [httpbin][httpbin-org] service that uses the OpenZiti SDK to listen for HTTP requests on an OpenZiti zero trust overlay instead of IP.
 
-[![OpenZiti github stars badge](https://img.shields.io/github/stars/openziti/ziti?style=flat)](https://github.com/openziti/ziti/stargazers)
+## Tutorial
+
+You may follow the steps in [the end-to-end tutorial](./examples/ziti-end-to-end#readme) to run a local Ziti stack built from the main Ziti source repo [![OpenZiti github stars badge](https://img.shields.io/github/stars/openziti/ziti?style=flat)](https://github.com/openziti/ziti/stargazers).
 
 ## Usage
 
