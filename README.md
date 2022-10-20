@@ -1,12 +1,9 @@
-# go-httpbin
+# go-httpbin with embedded OpenZiti
 
 A reasonably complete and well-tested golang port of [Kenneth Reitz][kr]'s
-[httpbin][httpbin-org] service, with zero dependencies outside the go stdlib other than the Ziti SDK.
+[httpbin][httpbin-org] service that uses the OpenZiti SDK to listen for HTTP requests on an OpenZiti zero trust overlay instead of IP.
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/mccutchen/go-httpbin/v2)](https://pkg.go.dev/github.com/mccutchen/go-httpbin/v2)
-[![Build status](https://github.com/mccutchen/go-httpbin/actions/workflows/test.yaml/badge.svg)](https://github.com/mccutchen/go-httpbin/actions/workflows/test.yaml)
-[![Coverage](https://codecov.io/gh/mccutchen/go-httpbin/branch/main/graph/badge.svg)](https://codecov.io/gh/mccutchen/go-httpbin)
-[![Docker Pulls](https://badgen.net/docker/pulls/mccutchen/go-httpbin?icon=docker&label=pulls)](https://hub.docker.com/r/mccutchen/go-httpbin/)
+[![OpenZiti github stars badge](https://img.shields.io/github/stars/openziti/ziti?style=flat)](https://github.com/openziti/ziti/stargazers)
 
 ## Usage
 
@@ -40,21 +37,8 @@ a standalone binary. (This currently requires a working Go runtime.)
 
 Examples:
 
-```bash
-# Run http server
-$ go-httpbin -host 127.0.0.1 -port 8081
-
-# Run https server
-$ openssl genrsa -out server.key 2048
-$ openssl ecparam -genkey -name secp384r1 -out server.key
-$ openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
-$ go-httpbin -host 127.0.0.1 -port 8081 -https-cert-file ./server.crt -https-key-file ./server.key
-```
-
-Ziti Enabled Examples
-
-[![Ziti Reference](https://github.com/openziti/ziti)]
-[![Ziti Http Reference](https://github.com/openziti-test-kitchen/go-http)]
+[![Ziti Reference](https://github.com/openziti/ziti#readme)]
+[![Ziti Http Reference](https://github.com/openziti-test-kitchen/go-http#readme)]
 This example assumes you are familiar with spinning up a ziti network and have a network with a service named "httpbin".
 
 ```bash
@@ -107,65 +91,6 @@ Build the Container Image for your Platform
 
 ```bash
 docker compose build httpbin
-```
-
-### Unit testing helper library
-
-The `github.com/mccutchen/go-httpbin/httpbin/v2` package can also be used as a
-library for testing an application's interactions with an upstream HTTP
-service, like so:
-
-```go
-package httpbin_test
-
-import (
-    "net/http"
-    "net/http/httptest"
-    "os"
-    "testing"
-    "time"
-
-    "github.com/mccutchen/go-httpbin/v2/httpbin"
-)
-
-func TestSlowResponse(t *testing.T) {
-    app := httpbin.New()
-    testServer := httptest.NewServer(app.Handler())
-    defer testServer.Close()
-
-    client := http.Client{
-        Timeout: time.Duration(1 * time.Second),
-    }
-
-    _, err := client.Get(testServer.URL + "/delay/10")
-    if !os.IsTimeout(err) {
-        t.Fatalf("expected timeout error, got %s", err)
-    }
-}
-```
-
-## Custom instrumentation
-
-If you're running go-httpbin in your own infrastructure and would like custom
-instrumentation (metrics, structured logging, request tracing, etc), you'll
-need to wrap this package in your own code and use the included
-[Observer][observer] mechanism to instrument requests as necessary.
-
-See [examples/custom-instrumentation][custom-instrumentation] for an example
-that instruments every request using DataDog.
-
-## Installation
-
-To add go-httpbin to an existing golang project:
-
-```bash
-go get -u github.com/mccutchen/go-httpbin/v2
-```
-
-To install the `go-httpbin` binary:
-
-```bash
-go install github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin
 ```
 
 ## Motivation & prior art
