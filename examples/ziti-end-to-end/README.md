@@ -111,7 +111,7 @@ CONTROLLER_HOST=localhost \
 CONTROLLER_PORT=6262 \
 ZITI_EDGE_PORT=3022 \
 LINK_LISTENER_PORT=4022 \
-exec ziti-router run \
+ziti-router run \
     --debug-ops \
     --verbose \
     --log-formatter pfxlog \
