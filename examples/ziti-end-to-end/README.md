@@ -7,12 +7,17 @@ Ziti Binaries and relevant configs.
 
 [OpenZiti](https://github.com/openziti/ziti/tree/main) contains downloads for the latest builds or you can build it yourself. There are many example configs [in the etc dir](https://github.com/openziti/ziti/tree/main/etc).
 
-I have set up helpful environment variable for how I chose to get setup. I cloned the Ziti repository for local builds and set `$ZITI_SOURCE` to that directory. I then went into that directory and ran 
+I have set up helpful environment variable for how I chose to get setup. I cloned the Ziti repository for local builds and set `$ZITI_SOURCE` to that directory's parent (to align with that repo's use of `$ZITI_SOURCE`). I then went into that directory and ran 
 ```
 go install ./...
 ```
 
-This will output the binary to `$GOPATH/bin`. I then do the same thing with this repository to install the go-httpbin binaries
+This will output the binary to `$GOPATH/bin`.
+
+I then do the same thing with this repository to install the go-httpbin binaries. Go to the directory we cloned this and run
+```
+go install ./...
+```
 
 ## Starting up the Ziti Network:
 
@@ -28,7 +33,7 @@ Then run the ziti controller with the arguent being which ever config file we ch
 
 
 ```
-ziti-controller run --log-formatter pfxlog $ZITI_SOURCE/etc/ctrl.with.edge.yml
+ziti-controller run --log-formatter pfxlog ${ZITI_SOURCE}/ziti/etc/ctrl.with.edge.yml
 ```
 
 You can then login to the edge via `ziti edge login` and putting in your credentials.
@@ -102,7 +107,7 @@ ziti edge create edge-router edge-router \
 
 Just like with the controller I'm using an example `edge.router.yml` found in the source repository.
 ```
-ziti-router enroll --jwt edge-router.jwt ${ZITI_SOURCE}/etc/edge.router.yml
+ziti-router enroll --jwt edge-router.jwt ${ZITI_SOURCE}/ziti/etc/edge.router.yml
 ```
 
 Now we run the edge router like so! The controller host and port info is found in the controller config file you used.
@@ -115,7 +120,7 @@ ziti-router run \
     --debug-ops \
     --verbose \
     --log-formatter pfxlog \
-    ${ZITI_SOURCE}/etc/edge.router.yml
+    ${ZITI_SOURCE}/ziti/etc/edge.router.yml
 ```
 
 ## go-httpbin Server
