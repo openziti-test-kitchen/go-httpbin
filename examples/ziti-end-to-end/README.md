@@ -7,6 +7,8 @@ Ziti Binaries and relevant configs.
 
 [OpenZiti](https://github.com/openziti/ziti/tree/main) contains downloads for the latest builds or you can build it yourself. There are many example configs [in the etc dir](https://github.com/openziti/ziti/tree/main/etc).
 
+Most of these config files user a `$ZITI_DATA` directory with a `db` folder inside. That can live wherever you want, just be sure to update the config files or create the needed folders.
+
 I have set up helpful environment variable for how I chose to get setup. I cloned the Ziti repository for local builds and set `$ZITI_SOURCE` to that directory's parent (to align with that repo's use of `$ZITI_SOURCE`). I then went into that directory and ran 
 ```
 go install ./...
@@ -23,17 +25,22 @@ go install ./...
 
 ### Controller Setup
 
-First we need to initialize the controller with an admin user. For ease of testing I just used `admin admin admin` for my short local test.
-
+First we need to init the edge to be able to run the controller
 ```
-ziti agent controller init <username> <password> <name-of-user>
+ziti-controller edge init --log-formatter pfxlog -v ${ZITI_SOURCE}/ziti/etc/ctrl.with.edge.yml -u admin -p admin
 ```
 
-Then run the ziti controller with the arguent being which ever config file we chose. For this example I am using the `ctrl.with.edge.yml` file bundled for examples in the ziti repository.
+Next we run the ziti controller with the arguent being which ever config file we chose. For this example I am using the `ctrl.with.edge.yml` file bundled for examples in the ziti repository.
 
 
 ```
 ziti-controller run --log-formatter pfxlog ${ZITI_SOURCE}/ziti/etc/ctrl.with.edge.yml
+```
+
+Then we need to initialize the controller with an admin user. For ease of testing I just used `admin admin admin` for my short local test.
+[//]: # Maybe skip?
+```
+ziti agent controller init <username> <password> <name-of-user>
 ```
 
 You can then login to the edge via `ziti edge login` and putting in your credentials.
