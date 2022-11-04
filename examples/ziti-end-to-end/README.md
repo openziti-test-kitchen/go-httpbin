@@ -37,12 +37,6 @@ Next we run the ziti controller with the arguent being which ever config file we
 ziti-controller run --log-formatter pfxlog ${ZITI_SOURCE}/ziti/etc/ctrl.with.edge.yml
 ```
 
-Then we need to initialize the controller with an admin user. For ease of testing I just used `admin admin admin` for my short local test.
-[//]: # Maybe skip?
-```
-ziti agent controller init <username> <password> <name-of-user>
-```
-
 You can then login to the edge via `ziti edge login` and putting in your credentials.
 
 ### Policies
