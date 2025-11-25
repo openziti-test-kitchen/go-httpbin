@@ -5,6 +5,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -19,6 +20,8 @@ import (
 	"time"
 
 	"github.com/mccutchen/go-httpbin/v2/httpbin"
+	"github.com/openziti/sdk-golang/ziti"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -131,6 +134,12 @@ type config struct {
 	SrvReadHeaderTimeout   time.Duration
 	SrvReadTimeout         time.Duration
 
+	// Ziti configuration
+	EnableZiti        bool
+	ZitiIdentityFile  string
+	ZitiIdentityJSON  string
+	ZitiServiceName   string
+
 	// If true, endpoints that allow clients to specify a response
 	// Conntent-Type will NOT escape HTML entities in the response body, which
 	// can enable (e.g.) reflected XSS attacks.
@@ -179,6 +188,11 @@ func loadConfig(args []string, getEnvVal func(string) string, getEnviron func() 
 	fs.IntVar(&cfg.SrvMaxHeaderBytes, "srv-max-header-bytes", defaultSrvMaxHeaderBytes, "Value to use for the http.Server's MaxHeaderBytes option")
 	fs.DurationVar(&cfg.SrvReadHeaderTimeout, "srv-read-header-timeout", defaultSrvReadHeaderTimeout, "Value to use for the http.Server's ReadHeaderTimeout option")
 	fs.DurationVar(&cfg.SrvReadTimeout, "srv-read-timeout", defaultSrvReadTimeout, "Value to use for the http.Server's ReadTimeout option")
+
+	// Ziti flags
+	fs.BoolVar(&cfg.EnableZiti, "ziti", false, "Enable Ziti network overlay")
+	fs.StringVar(&cfg.ZitiIdentityFile, "ziti-identity", "", "Path to Ziti identity JSON file")
+	fs.StringVar(&cfg.ZitiServiceName, "ziti-service-name", "", "Name of the Ziti service to bind")
 
 	// Here be dragons! This flag is only for backwards compatibility and
 	// should not be used in production.
@@ -317,6 +331,30 @@ func loadConfig(args []string, getEnvVal func(string) string, getEnviron func() 
 		cfg.UnsafeAllowDangerousResponses = true
 	}
 
+	// Ziti configuration from environment variables
+	if !cfg.EnableZiti && getEnvBool(getEnvVal("ENABLE_ZITI")) {
+		cfg.EnableZiti = true
+	}
+	if cfg.ZitiIdentityFile == "" && getEnvVal("ZITI_IDENTITY") != "" {
+		cfg.ZitiIdentityFile = getEnvVal("ZITI_IDENTITY")
+	}
+	if cfg.ZitiIdentityJSON == "" && getEnvVal("ZITI_IDENTITY_JSON") != "" {
+		cfg.ZitiIdentityJSON = getEnvVal("ZITI_IDENTITY_JSON")
+	}
+	if cfg.ZitiServiceName == "" && getEnvVal("ZITI_SERVICE_NAME") != "" {
+		cfg.ZitiServiceName = getEnvVal("ZITI_SERVICE_NAME")
+	}
+
+	// Validate Ziti configuration
+	if cfg.EnableZiti {
+		if cfg.ZitiIdentityFile == "" && cfg.ZitiIdentityJSON == "" {
+			return nil, configErr("Ziti enabled but no identity provided (use ZITI_IDENTITY or ZITI_IDENTITY_JSON)")
+		}
+		if cfg.ZitiServiceName == "" {
+			return nil, configErr("Ziti enabled but no service name provided (use ZITI_SERVICE_NAME)")
+		}
+	}
+
 	// reset temporary fields to their zero values
 	cfg.rawAllowedRedirectDomains = ""
 	cfg.rawUseRealHostname = false
@@ -354,7 +392,17 @@ func listenAndServeGracefully(srv *http.Server, cfg *config, logger *slog.Logger
 	}()
 
 	var err error
-	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+	var listener net.Listener
+
+	// Set up Ziti listener if enabled
+	if cfg.EnableZiti {
+		listener, err = createZitiListener(cfg, logger)
+		if err != nil {
+			return fmt.Errorf("failed to create Ziti listener: %w", err)
+		}
+		logger.Info(fmt.Sprintf("go-httpbin listening on ziti serviceName=%s", cfg.ZitiServiceName))
+		err = srv.Serve(listener)
+	} else if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
 		logger.Info(fmt.Sprintf("go-httpbin listening on https://%s", srv.Addr))
 		err = srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
 	} else {
@@ -366,4 +414,79 @@ func listenAndServeGracefully(srv *http.Server, cfg *config, logger *slog.Logger
 	}
 
 	return <-doneCh
+}
+
+// createZitiListener creates and returns a Ziti network listener
+func createZitiListener(cfg *config, logger *slog.Logger) (net.Listener, error) {
+	var zitiContext ziti.Context
+	var err error
+
+	// Enable SDK debug logging if ZITI_SDK_DEBUG=1
+	if os.Getenv("ZITI_SDK_DEBUG") == "1" {
+		logrus.SetLevel(logrus.DebugLevel)
+		logger.Info("enabled Ziti SDK debug logging")
+	}
+
+	logger.Info("starting Ziti initialization",
+		"serviceName", cfg.ZitiServiceName,
+		"hasIdentityFile", cfg.ZitiIdentityFile != "",
+		"hasIdentityJSON", cfg.ZitiIdentityJSON != "")
+
+	// Load identity from file or JSON string
+	if cfg.ZitiIdentityFile != "" {
+		zitiContext, err = ziti.NewContextFromFile(cfg.ZitiIdentityFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load Ziti identity from file %s: %w", cfg.ZitiIdentityFile, err)
+		}
+		logger.Info("loaded Ziti identity from file", "path", cfg.ZitiIdentityFile)
+	} else if cfg.ZitiIdentityJSON != "" {
+		// Validate JSON structure
+		var identityData map[string]interface{}
+		if jsonErr := json.Unmarshal([]byte(cfg.ZitiIdentityJSON), &identityData); jsonErr != nil {
+			return nil, fmt.Errorf("invalid identity JSON: %w", jsonErr)
+		}
+		
+		// Check for required fields
+		if _, hasID := identityData["id"]; !hasID {
+			return nil, fmt.Errorf("identity JSON missing required 'id' field")
+		}
+		if _, hasZtAPI := identityData["ztAPI"]; !hasZtAPI {
+			return nil, fmt.Errorf("identity JSON missing required 'ztAPI' field")
+		}
+		
+		// Write to temp file (SDK v1.2.10 requires file-based loading)
+		tmpFile, err := os.CreateTemp("", "ziti-identity-*.json")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temp file for Ziti identity: %w", err)
+		}
+		tmpFileName := tmpFile.Name()
+		defer os.Remove(tmpFileName)
+		
+		if _, writeErr := tmpFile.WriteString(cfg.ZitiIdentityJSON); writeErr != nil {
+			tmpFile.Close()
+			return nil, fmt.Errorf("failed to write Ziti identity to temp file: %w", writeErr)
+		}
+		tmpFile.Close()
+		
+		zitiContext, err = ziti.NewContextFromFile(tmpFileName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load Ziti identity from JSON: %w", err)
+		}
+		logger.Info("loaded Ziti identity from ZITI_IDENTITY_JSON environment variable",
+			"jsonLength", len(cfg.ZitiIdentityJSON))
+	} else {
+		return nil, fmt.Errorf("no Ziti identity provided (set ZITI_IDENTITY or ZITI_IDENTITY_JSON)")
+	}
+
+	// Create listener for the service
+	// The SDK handles authentication and TLS negotiation internally
+	// Enable ZITI_SDK_DEBUG=1 environment variable for detailed SDK logging
+	listener, err := zitiContext.Listen(cfg.ZitiServiceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bind to Ziti service %s (check ZITI_SDK_DEBUG=1 for details): %w", cfg.ZitiServiceName, err)
+	}
+	
+	logger.Info("successfully bound to Ziti service", "serviceName", cfg.ZitiServiceName)
+
+	return listener, nil
 }

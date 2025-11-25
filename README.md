@@ -1,7 +1,7 @@
 # go-httpbin
 
 A reasonably complete and well-tested golang port of [Kenneth Reitz][kr]'s
-[httpbin][httpbin-org] service, with zero dependencies outside the go stdlib.
+[httpbin][httpbin-org] service, with zero dependencies outside the go stdlib other than the Ziti SDK.
 
 [![GoDoc](https://pkg.go.dev/badge/github.com/mccutchen/go-httpbin/v2)](https://pkg.go.dev/github.com/mccutchen/go-httpbin/v2)
 [![Build status](https://github.com/mccutchen/go-httpbin/actions/workflows/ci.yaml/badge.svg)](https://github.com/mccutchen/go-httpbin/actions/workflows/ci.yaml)
@@ -51,6 +51,64 @@ $ openssl genrsa -out server.key 2048
 $ openssl ecparam -genkey -name secp384r1 -out server.key
 $ openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
 $ go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8081 -https-cert-file ./server.crt -https-key-file ./server.key
+```
+
+Ziti Enabled Examples
+
+[![Ziti Reference](https://github.com/openziti/ziti)]
+[![Ziti Http Reference](https://github.com/openziti-test-kitchen/go-http)]
+This example assumes you are familiar with spinning up a ziti network and have a network with a service named "httpbin".
+
+```bash
+# Ensure your ziti network is spun up.
+# Run http server
+$ go-httpbin -ziti -ziti-identity ./my-ziti-identity.json -ziti-name "my httpbin service"
+
+#Run https server
+$ openssl genrsa -out server.key 2048
+$ openssl ecparam -genkey -name secp384r1 -out server.key
+$ openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+$ go-httpbin -https-cert-file ./server.crt -https-key-file ./server.key -ziti -ziti-identity ${ZITI_IDENTITY} -ziti-name httpbin
+```
+
+### Docker
+
+A multi-platform Docker image is published to [Docker Hub](https://hub.docker.com/r/openziti/go-httpbin):
+
+Run the included Compose project:
+
+```bash
+# httpbinz-server1.json exists in the same dir as docker-compose.yml
+ZITI_IDENTITY_JSON="$(< ./my-ziti-identity.json)" \
+ZITI_SERVICE_NAME="my httpbin service" \
+    docker compose run httpbin
+```
+
+Run without Compose:
+
+```bash
+# Run http server with my-ziti-identity.json in current working dir
+docker run \
+    -e ENABLE_ZITI=true \
+    -e ZITI_IDENTITY_JSON="$(< ./my-ziti-identity.json)" \
+    -e ZITI_SERVICE_NAME="my httpbin service" \
+    openziti/go-httpbin
+
+# Run https server with my-ziti-identity.json in current working dir
+docker run \
+    -e HTTPS_CERT_FILE='/tmp/server.crt' \
+    -e HTTPS_KEY_FILE='/tmp/server.key' \
+    -v /tmp:/tmp \
+    -e ENABLE_ZITI=true \
+    -e ZITI_IDENTITY_JSON="$(< ./my-ziti-identity.json)" \
+    -e ZITI_SERVICE_NAME="my httpbin service" \
+    openziti/go-httpbin
+```
+
+Build the Container Image for your Platform
+
+```bash
+docker compose build httpbin
 ```
 
 ### Unit testing helper library
@@ -115,6 +173,11 @@ variables (or a combination of the two):
 | `-srv-read-header-timeout` | `SRV_READ_HEADER_TIMEOUT` | Value to use for the http.Server's ReadHeaderTimeout option | 1s |
 | `-srv-read-timeout` | `SRV_READ_TIMEOUT` | Value to use for the http.Server's ReadTimeout option | 5s |
 | `-use-real-hostname` | `USE_REAL_HOSTNAME` | Expose real hostname as reported by os.Hostname() in the /hostname endpoint | false |
+| `-ziti` | `ENABLE_ZITI` | Enable using a ziti network | false|
+| `-ziti-identity` | `ZITI_IDENTITY` | Ziti identity json file location | - |
+| `-ziti-name` | `ZITI_SERVICE_NAME` | Name of Ziti Service to bind against | - |
+
+#### ⚠️ **HERE BE DRAGONS** ⚠️
 
 > [!WARNING]
 > These configuration options are dangerous and/or deprecated and should be
