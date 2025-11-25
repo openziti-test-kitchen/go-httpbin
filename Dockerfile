@@ -1,14 +1,14 @@
 # syntax = docker/dockerfile:1.3
-FROM golang:1.23 AS build
+FROM golang:1.24 AS build
 
 WORKDIR /go/src/github.com/mccutchen/go-httpbin
 
 COPY . .
 
 RUN --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
-    make build buildtests
+    make build
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/base
 
 COPY --from=build /go/src/github.com/mccutchen/go-httpbin/dist/go-httpbin* /bin/
 
