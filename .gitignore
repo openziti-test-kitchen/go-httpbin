@@ -1,4 +1,5 @@
 .*
+!.github
 *.exe
 *.test
 *.prof
