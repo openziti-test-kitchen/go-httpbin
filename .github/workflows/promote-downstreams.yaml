@@ -1,0 +1,54 @@
+# Promote a pre-release container image to :latest on Docker Hub.
+# Triggered automatically when a GitHub release is marked "latest"
+# (the 'released' event excludes prereleases), or manually via
+# workflow_dispatch on a release tag.
+
+name: Promote Downstream Releases
+
+on:
+  workflow_dispatch:
+  release:
+    types: [released]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_REPO: ${{ vars.GO_HTTPBIN_CONTAINER_IMAGE_REPO || 'openziti/go-httpbin' }}
+
+jobs:
+  enforce-stable-semver:
+    name: Require Stable Release Semver
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - name: Parse Release Version
+        id: parse
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+_[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "GITHUB_REF_NAME=${GITHUB_REF_NAME} is a stable release semver ref"
+            echo "version=${GITHUB_REF_NAME#v}" | tee -a $GITHUB_OUTPUT
+          else
+            echo "GITHUB_REF_NAME=${GITHUB_REF_NAME} is not a stable release semver ref" >&2
+            exit 1
+          fi
+
+  promote-docker:
+    name: Tag Container Image :latest
+    needs: enforce-stable-semver
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_HUB_API_USER || secrets.DOCKER_HUB_API_USER }}
+          password: ${{ secrets.DOCKER_HUB_API_TOKEN }}
+
+      - name: Tag Latest
+        run: >
+          docker buildx imagetools create --tag
+          ${{ env.IMAGE_REPO }}:latest
+          ${{ env.IMAGE_REPO }}:${{ needs.enforce-stable-semver.outputs.version }}
