@@ -25,7 +25,7 @@ jobs:
           images: ${{ env.IMAGE_REPO }}
           tags: |
             type=ref,event=branch
-            type=ref,event=tag
+            type=semver,pattern={{version}},event=tag
 
       - name: Set Up QEMU
         uses: docker/setup-qemu-action@v3
