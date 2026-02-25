@@ -50,6 +50,12 @@ const usage = `Usage of go-httpbin:
     	Allow endpoints to return unescaped HTML when clients control response Content-Type (enables XSS attacks)
   -use-real-hostname
     	Expose value of os.Hostname() in the /hostname endpoint instead of dummy value
+  -ziti
+    	Enable Ziti network overlay
+  -ziti-identity string
+    	Path to Ziti identity JSON file
+  -ziti-service-name string
+    	Name of the Ziti service to bind
 `
 
 func TestLoadConfig(t *testing.T) {
