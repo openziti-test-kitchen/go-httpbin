@@ -1,90 +1,83 @@
-# Build and push Docker images when a GitHub release is published.
-# If the release is stable (not a prerelease, no hyphenated suffix),
-# also promote the image to the :latest tag.
+# Build and push multi-arch Docker images to Docker Hub when a version tag
+# is pushed. The tag triggers a pre-release build; promotion to :latest
+# happens separately in promote-downstreams.yaml.
 
-name: release
+name: Pre-Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: docker.io
+  IMAGE_REPO: ${{ vars.GO_HTTPBIN_CONTAINER_IMAGE_REPO || 'openziti/go-httpbin' }}
 
 jobs:
-  build-and-push:
+  publish-docker-image:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      is_stable: ${{ steps.version.outputs.is_stable }}
-
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Extract version from release tag
-        id: version
+      - name: Set Version from Tag Ref
+        id: semver
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" | tee -a $GITHUB_OUTPUT
 
-          # Stable = no hyphen suffix (e.g., 2.19.0_1.4.2 is stable,
-          # 2.19.0_1.4.2-rc1 is not)
-          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+_[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "is_stable=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_stable=false" >> "$GITHUB_OUTPUT"
-          fi
+      - uses: actions/checkout@v4
 
-          echo "Version: ${TAG}"
-
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
-      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
-
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - name: Set Up QEMU
+        uses: docker/setup-qemu-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          platforms: amd64,arm64
 
-      - uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
-        id: meta
-        env:
-          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
-        with:
-          images: |
-            openziti/go-httpbin
-          tags: |
-            type=raw,value=${{ steps.version.outputs.version }}
+      - name: Set Up Docker BuildKit
+        id: buildx
+        uses: docker/setup-buildx-action@v3
 
-      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ vars.DOCKER_HUB_API_USER || secrets.DOCKER_HUB_API_USER }}
+          password: ${{ secrets.DOCKER_HUB_API_TOKEN }}
+
+      - name: Build & Push Multi-Platform Container Image
+        uses: docker/build-push-action@v6
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
-          sbom: true
+          tags: ${{ env.IMAGE_REPO }}:${{ steps.semver.outputs.version }}
           provenance: mode=max
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
+          sbom: true
+          push: true
 
-  promote-latest:
-    needs: build-and-push
+  draft-release:
     runs-on: ubuntu-latest
-    # Only promote to latest for stable, non-prerelease versions
-    if: >-
-      github.event.release.prerelease == false &&
-      needs.build-and-push.outputs.is_stable == 'true'
-
+    needs: publish-docker-image
+    permissions:
+      contents: write
     steps:
-      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+      - uses: actions/checkout@v4
 
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Promote to latest
+      - name: Draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
         run: |
-          docker buildx imagetools create \
-            --tag openziti/go-httpbin:latest \
-            openziti/go-httpbin:${{ needs.build-and-push.outputs.version }}
+          EXISTING=$(gh release view "$VERSION" --json isDraft --jq '.isDraft' 2>/dev/null || echo "not_found")
+
+          if [ "$EXISTING" = "true" ]; then
+            echo "Draft release $VERSION already exists, updating..."
+            gh release edit "$VERSION" \
+              --draft \
+              --title "$VERSION"
+          elif [ "$EXISTING" = "not_found" ]; then
+            echo "Creating draft release $VERSION..."
+            gh release create "$VERSION" \
+              --draft \
+              --generate-notes \
+              --title "$VERSION"
+          else
+            echo "Release $VERSION already published (isDraft=$EXISTING), skipping."
+          fi
