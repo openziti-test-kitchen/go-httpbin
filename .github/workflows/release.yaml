@@ -7,7 +7,7 @@ name: Pre-Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*'
 
 env:
   REGISTRY: docker.io
