@@ -34,7 +34,7 @@ jobs:
       run: make testci
 
     - uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
-      if: ${{ matrix.go-version == 'stable' }}
+      if: ${{ matrix.go-version == 'stable' && github.repository_owner == 'mccutchen' }}
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
